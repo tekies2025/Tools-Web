@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>XML Formatter</title>
+<style>
+:root{
+  --bg:#0f1117;--surface:#1a1d27;--surface2:#21263a;--border:#2e3348;
+  --accent:#5b8def;--accent2:#7c5cbf;--success:#3ecf8e;--warn:#f59e0b;
+  --error:#f87171;--text:#e2e8f0;--muted:#7a849e;
+  --mono:'JetBrains Mono','Fira Code',monospace;--sans:'Inter',system-ui,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:100vh;}
+main{padding:22px 26px 40px;max-width:1300px;margin:0 auto;}
+
+.page-head{margin-bottom:18px;}
+.page-head h1{font-size:17px;font-weight:700;display:flex;align-items:center;gap:9px;}
+.page-head .tag{font-size:9px;padding:2px 8px;border-radius:20px;background:#2d1e4f;color:#c084fc;font-weight:700;letter-spacing:.5px;text-transform:uppercase;}
+.page-head p{font-size:12px;color:var(--muted);margin-top:4px;}
+
+.toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:14px;}
+.btn{padding:8px 16px;border-radius:8px;font-size:12.5px;font-weight:600;cursor:pointer;border:1px solid var(--border);background:var(--surface);color:var(--text);font-family:var(--sans);transition:all .15s;display:flex;align-items:center;gap:6px;}
+.btn:hover{border-color:var(--accent);color:var(--accent);}
+.btn-primary{background:linear-gradient(135deg,var(--accent),var(--accent2));border:none;color:#fff;box-shadow:0 4px 16px rgba(91,141,239,.3);}
+.btn-primary:hover{color:#fff;transform:translateY(-1px);}
+.btn-danger:hover{border-color:var(--error);color:var(--error);}
+.spacer{flex:1;}
+
+.opt{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--muted);}
+select{background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:6px 8px;font-size:11.5px;font-family:var(--sans);outline:none;}
+select:focus{border-color:var(--accent);}
+
+.panels{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+@media(max-width:900px){.panels{grid-template-columns:1fr;}main{padding:14px;}}
+
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;display:flex;flex-direction:column;min-height:420px;}
+.panel-header{padding:10px 14px;border-bottom:1px solid var(--border);background:var(--surface2);display:flex;align-items:center;justify-content:space-between;}
+.panel-title{font-size:11.5px;font-weight:600;color:var(--muted);display:flex;align-items:center;gap:6px;}
+.upload-btn{font-size:10.5px;color:var(--muted);cursor:pointer;border:1px solid var(--border);padding:3px 9px;border-radius:20px;background:transparent;}
+.upload-btn:hover{color:var(--accent);border-color:var(--accent);}
+
+textarea{flex:1;background:var(--bg);border:none;color:var(--text);font-family:var(--mono);font-size:12px;line-height:1.65;padding:14px;resize:none;outline:none;min-height:380px;}
+textarea::placeholder{color:var(--muted);}
+
+#output{flex:1;overflow:auto;background:var(--bg);padding:14px;font-family:var(--mono);font-size:12px;line-height:1.65;white-space:pre-wrap;word-break:break-word;min-height:380px;}
+.tok-tag{color:#c084fc;}
+.tok-attr{color:#60a5fa;}
+.tok-val{color:#4ade80;}
+.tok-com{color:var(--muted);font-style:italic;}
+.tok-decl{color:#fb923c;}
+
+.status-bar{display:flex;align-items:center;gap:10px;padding:10px 14px;border-top:1px solid var(--border);font-size:11.5px;}
+.status-ok{color:var(--success);}
+.status-error{color:var(--error);}
+.status-idle{color:var(--muted);}
+.stat{color:var(--muted);margin-left:auto;font-family:var(--mono);font-size:10.5px;}
+
+::-webkit-scrollbar{width:6px;height:6px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px;}
+</style>
+</head>
+<body>
+<main>
+  <div class="page-head">
+    <h1>&lt;/&gt; XML Formatter <span class="tag">XML</span></h1>
+    <p>Paste or upload XML to pretty-print, minify, and check well-formedness — entirely in your browser.</p>
+  </div>
+
+  <div class="toolbar">
+    <button class="btn btn-primary" onclick="format()">✨ Format</button>
+    <button class="btn" onclick="minify()">📦 Minify</button>
+    <button class="btn" onclick="validateOnly()">✔ Validate</button>
+    <div class="opt">
+      Indent
+      <select id="indent">
+        <option value="2">2 spaces</option>
+        <option value="4">4 spaces</option>
+        <option value="tab">Tab</option>
+      </select>
+    </div>
+    <div class="spacer"></div>
+    <button class="btn" onclick="copyOutput()">⧉ Copy</button>
+    <button class="btn" onclick="downloadOutput()">⬇ Download</button>
+    <button class="btn btn-danger" onclick="clearAll()">✕ Clear</button>
+  </div>
+
+  <div class="panels">
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title">📥 Input</div>
+        <div class="upload-btn" onclick="document.getElementById('file-input').click()">Upload file</div>
+        <input type="file" id="file-input" accept=".xml,.txt,.xsd" style="display:none" onchange="loadFile(event)"/>
+      </div>
+      <textarea id="input" placeholder="Paste XML here, e.g. <root><item>1</item></root>" oninput="onInputChange()"></textarea>
+    </div>
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title">📤 Output</div>
+      </div>
+      <div id="output"><span style="color:var(--muted)">Formatted XML will appear here…</span></div>
+      <div class="status-bar">
+        <span id="status" class="status-idle">Waiting for input</span>
+        <span class="stat" id="stat"></span>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script>
+function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function setStatus(msg,cls){
+  const el=document.getElementById('status');
+  el.textContent=msg; el.className=cls;
+}
+
+function checkWellFormed(raw){
+  const doc=new DOMParser().parseFromString(raw,'application/xml');
+  const perr=doc.querySelector('parsererror');
+  if(perr) throw new Error(perr.textContent.replace(/\s+/g,' ').trim().slice(0,200));
+  return doc;
+}
+
+// Strip whitespace-only text nodes between tags, keep everything else intact
+function minifyXml(raw){
+  return raw
+    .replace(/>\s+</g,'><')
+    .replace(/^\s+|\s+$/g,'')
+    .replace(/\n/g,'');
+}
+
+// Indent an XML string irrespective of current whitespace
+function formatXml(raw,indentUnit){
+  const compact=minifyXml(raw);
+  let formatted='';
+  let pad=0;
+  const tokens=compact.split(/(<[^>]+>)/g).filter(t=>t.length);
+
+  tokens.forEach(tok=>{
+    if(!tok.startsWith('<')){
+      if(tok.trim()) formatted+=indentUnit.repeat(pad)+tok.trim()+'\n';
+      return;
+    }
+    if(/^<\?/.test(tok) || /^<!/.test(tok)){
+      formatted+=indentUnit.repeat(pad)+tok+'\n';
+      return;
+    }
+    if(/^<\//.test(tok)){
+      pad=Math.max(0,pad-1);
+      formatted+=indentUnit.repeat(pad)+tok+'\n';
+      return;
+    }
+    if(/\/>\s*$/.test(tok)){
+      formatted+=indentUnit.repeat(pad)+tok+'\n';
+      return;
+    }
+    formatted+=indentUnit.repeat(pad)+tok+'\n';
+    pad++;
+  });
+  return formatted.trim();
+}
+
+function highlight(xml){
+  return esc(xml).replace(
+    /(&lt;\/?[\w:.-]+|&gt;|\/&gt;|[\w:.-]+=|&quot;[^&]*&quot;|&lt;!--[\s\S]*?--&gt;|&lt;\?[\s\S]*?\?&gt;)/g,
+    m=>{
+      if(m.startsWith('&lt;!--')) return `<span class="tok-com">${m}</span>`;
+      if(m.startsWith('&lt;?')) return `<span class="tok-decl">${m}</span>`;
+      if(/^&lt;\/?[\w:.-]+$/.test(m)) return `<span class="tok-tag">${m}</span>`;
+      if(/=$/.test(m)) return `<span class="tok-attr">${m}</span>`;
+      if(/^&quot;/.test(m)) return `<span class="tok-val">${m}</span>`;
+      return m;
+    }
+  );
+}
+
+function getIndent(){
+  const v=document.getElementById('indent').value;
+  return v==='tab' ? '\t' : ' '.repeat(Number(v));
+}
+
+function getRaw(){
+  const raw=document.getElementById('input').value.trim();
+  if(!raw) throw {custom:true,message:'Please paste or upload some XML first.'};
+  return raw;
+}
+
+function format(){
+  try{
+    const raw=getRaw();
+    checkWellFormed(raw);
+    const out=formatXml(raw,getIndent());
+    document.getElementById('output').innerHTML=highlight(out);
+    setStatus('✓ Well-formed XML — formatted','status-ok');
+    updateStats(raw,out);
+  }catch(e){ handleError(e); }
+}
+
+function minify(){
+  try{
+    const raw=getRaw();
+    checkWellFormed(raw);
+    const out=minifyXml(raw);
+    document.getElementById('output').innerHTML=highlight(out);
+    setStatus('✓ Well-formed XML — minified','status-ok');
+    updateStats(raw,out);
+  }catch(e){ handleError(e); }
+}
+
+function validateOnly(){
+  try{
+    const raw=getRaw();
+    checkWellFormed(raw);
+    document.getElementById('output').innerHTML='<span style="color:var(--success)">✓ This XML is well-formed. Click Format or Minify to view it.</span>';
+    setStatus('✓ Well-formed XML','status-ok');
+    updateStats(raw,raw);
+  }catch(e){ handleError(e); }
+}
+
+function handleError(e){
+  if(e&&e.custom){
+    document.getElementById('output').innerHTML=`<span style="color:var(--muted)">${esc(e.message)}</span>`;
+    setStatus(e.message,'status-idle');
+    return;
+  }
+  document.getElementById('output').innerHTML=`<span style="color:var(--error)">✕ Not well-formed<br>${esc(e.message)}</span>`;
+  setStatus('✕ Not well-formed','status-error');
+  document.getElementById('stat').textContent='';
+}
+
+function updateStats(raw,out){
+  document.getElementById('stat').textContent=`${raw.length.toLocaleString()} → ${out.length.toLocaleString()} chars`;
+}
+
+function onInputChange(){
+  if(!document.getElementById('input').value.trim()){
+    document.getElementById('output').innerHTML='<span style="color:var(--muted)">Formatted XML will appear here…</span>';
+    setStatus('Waiting for input','status-idle');
+    document.getElementById('stat').textContent='';
+  }
+}
+
+function copyOutput(){
+  const text=document.getElementById('output').innerText;
+  if(!text||text.includes('will appear here')) return;
+  navigator.clipboard.writeText(text).then(()=>{
+    setStatus('✓ Copied to clipboard','status-ok');
+  });
+}
+
+function downloadOutput(){
+  const text=document.getElementById('output').innerText;
+  if(!text||text.includes('will appear here')) return;
+  const a=document.createElement('a');
+  a.href='data:application/xml;charset=utf-8,'+encodeURIComponent(text);
+  a.download='formatted.xml'; a.click();
+}
+
+function loadFile(e){
+  const f=e.target.files[0];
+  if(!f) return;
+  const r=new FileReader();
+  r.onload=ev=>{ document.getElementById('input').value=ev.target.result; format(); };
+  r.readAsText(f);
+}
+
+function clearAll(){
+  document.getElementById('input').value='';
+  document.getElementById('file-input').value='';
+  onInputChange();
+}
+</script>
+</body>
+</html>

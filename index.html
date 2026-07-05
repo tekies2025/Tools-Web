@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
+<title>DevBench — Developer Utilities</title>
+<!--
+  USAGE TRACKING (GoatCounter — free, no cookies, no login wall for visitors)
+  1. Sign up free at https://www.goatcounter.com/signup and create a site.
+  2. Replace YOUR-CODE below with the site code you're given (e.g. if your
+     dashboard URL is https://acme-devbench.goatcounter.com, YOUR-CODE is
+     "acme-devbench").
+  3. Deploy. Visit your dashboard at https://YOUR-CODE.goatcounter.com to see
+     total visits and a breakdown of which tool was opened, under "Pages".
+  no_onload:true means it won't auto-count on script load — instead the
+  trackPageview() function below fires a count each time someone switches
+  tools, since this app never does a real page reload.
+-->
+<script data-goatcounter="https://YOUR-CODE.goatcounter.com/count"
+        data-goatcounter-settings='{"no_onload":true}'
+        async src="//gc.zgo.at/count.js"></script>
+<style>
+:root{
+  --bg:#0f1117;--surface:#1a1d27;--surface2:#21263a;--border:#2e3348;
+  --accent:#5b8def;--accent2:#7c5cbf;--success:#3ecf8e;--warn:#f59e0b;
+  --error:#f87171;--text:#e2e8f0;--muted:#7a849e;
+  --mono:'JetBrains Mono','Fira Code',monospace;--sans:'Inter',system-ui,-apple-system,sans-serif;
+  --topbar-h:56px;--sidebar-w:230px;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{height:100%;}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);overflow:hidden;}
+
+/* ── Topbar ───────────────────────────────────────────── */
+.topbar{
+  position:fixed;top:0;left:0;right:0;height:var(--topbar-h);z-index:40;
+  display:flex;align-items:center;gap:12px;padding:0 16px;
+  background:var(--surface);border-bottom:1px solid var(--border);
+}
+.hamburger{
+  display:none;width:34px;height:34px;border-radius:8px;border:1px solid var(--border);
+  background:transparent;color:var(--text);cursor:pointer;flex-shrink:0;
+  align-items:center;justify-content:center;
+}
+.hamburger:hover{border-color:var(--accent);}
+.hamburger span{display:block;width:16px;height:2px;background:var(--text);position:relative;}
+.hamburger span::before,.hamburger span::after{content:'';position:absolute;left:0;width:16px;height:2px;background:var(--text);}
+.hamburger span::before{top:-5px;}
+.hamburger span::after{top:5px;}
+
+.brand{display:flex;align-items:center;gap:10px;cursor:pointer;user-select:none;}
+.brand .logo{width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;}
+.brand .name{font-size:15px;font-weight:700;letter-spacing:.2px;}
+.brand .name small{display:block;font-size:10px;font-weight:500;color:var(--muted);letter-spacing:.3px;}
+
+.topbar-title{margin-left:6px;padding-left:14px;border-left:1px solid var(--border);font-size:13px;color:var(--muted);}
+.topbar-title strong{color:var(--text);font-weight:600;}
+
+/* ── Layout shell ─────────────────────────────────────── */
+.shell{position:fixed;top:var(--topbar-h);left:0;right:0;bottom:0;display:flex;}
+
+.sidebar{
+  width:var(--sidebar-w);flex-shrink:0;background:var(--surface);border-right:1px solid var(--border);
+  overflow-y:auto;padding:16px 10px;
+}
+.nav-group-label{font-size:10px;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);padding:8px 10px 6px;font-weight:700;}
+.nav-item{
+  display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;cursor:pointer;
+  font-size:13px;color:var(--muted);margin-bottom:2px;transition:all .15s;border:1px solid transparent;
+}
+.nav-item .ic{font-size:15px;width:18px;text-align:center;flex-shrink:0;}
+.nav-item:hover{background:var(--surface2);color:var(--text);}
+.nav-item.active{background:var(--surface2);color:var(--text);border-color:var(--border);}
+.nav-item.active::before{content:'';width:3px;height:16px;background:var(--accent);border-radius:2px;margin-left:-15px;margin-right:-3px;}
+.nav-item.disabled{opacity:.45;cursor:default;}
+.nav-item.disabled:hover{background:transparent;color:var(--muted);}
+.nav-item .soon{margin-left:auto;font-size:8px;background:var(--bg);border:1px solid var(--border);padding:1px 5px;border-radius:20px;letter-spacing:.4px;}
+
+.backdrop{display:none;position:fixed;inset:0;top:var(--topbar-h);background:rgba(0,0,0,.55);z-index:29;}
+
+.content{flex:1;position:relative;overflow:hidden;background:var(--bg);}
+.view{position:absolute;inset:0;display:none;}
+.view.active{display:block;}
+.view iframe{width:100%;height:100%;border:none;background:var(--bg);}
+
+/* ── Home dashboard ───────────────────────────────────── */
+#view-home{overflow-y:auto;}
+.dash{max-width:1080px;margin:0 auto;padding:40px 28px 60px;}
+.dash-hero{margin-bottom:34px;}
+.dash-hero .eyebrow{font-size:11px;font-weight:700;letter-spacing:1px;color:var(--accent);text-transform:uppercase;margin-bottom:8px;}
+.dash-hero h1{font-size:28px;font-weight:700;margin-bottom:8px;letter-spacing:-.3px;}
+.dash-hero p{font-size:13.5px;color:var(--muted);max-width:520px;line-height:1.6;}
+
+.tool-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;}
+.tool-card{
+  background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px;
+  cursor:pointer;transition:transform .15s,border-color .15s,box-shadow .15s;position:relative;overflow:hidden;
+}
+.tool-card:hover{border-color:var(--accent);transform:translateY(-2px);box-shadow:0 10px 30px rgba(0,0,0,.35);}
+.tool-card .ic{width:38px;height:38px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:18px;margin-bottom:14px;}
+.tool-card h3{font-size:14.5px;font-weight:600;margin-bottom:6px;}
+.tool-card p{font-size:12px;color:var(--muted);line-height:1.55;}
+.tool-card .arrow{position:absolute;top:18px;right:18px;color:var(--muted);font-size:14px;transition:transform .15s,color .15s;}
+.tool-card:hover .arrow{transform:translate(3px,-3px);color:var(--accent);}
+
+.tool-card.soon{cursor:default;opacity:.55;}
+.tool-card.soon:hover{transform:none;border-color:var(--border);box-shadow:none;}
+.tool-card .badge-soon{position:absolute;top:18px;right:18px;font-size:8px;font-weight:700;letter-spacing:.5px;color:var(--muted);background:var(--bg);border:1px solid var(--border);padding:2px 7px;border-radius:20px;text-transform:uppercase;}
+
+.ic-json{background:#1e3a5f;color:#60a5fa;}
+.ic-xml{background:#2d1e4f;color:#c084fc;}
+.ic-schema{background:#1e3d2a;color:#4ade80;}
+.ic-gray{background:#22232b;color:var(--muted);}
+
+.section-label{font-size:11px;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);font-weight:700;margin:32px 0 12px;}
+
+::-webkit-scrollbar{width:6px;height:6px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px;}
+
+/* ── Mobile ───────────────────────────────────────────── */
+@media(max-width:860px){
+  .hamburger{display:flex;}
+  .sidebar{
+    position:fixed;top:var(--topbar-h);left:0;bottom:0;z-index:30;
+    transform:translateX(-100%);transition:transform .22s ease;box-shadow:8px 0 24px rgba(0,0,0,.4);
+  }
+  .sidebar.open{transform:translateX(0);}
+  .backdrop.show{display:block;}
+  .topbar-title{display:none;}
+  .dash{padding:26px 18px 50px;}
+  .dash-hero h1{font-size:22px;}
+}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <button class="hamburger" id="hamburger" aria-label="Toggle menu"><span></span></button>
+  <div class="brand" onclick="navigate('home')">
+    <div class="logo">⚡</div>
+    <div class="name">DevBench<small>Developer utilities</small></div>
+  </div>
+  <div class="topbar-title" id="topbar-title"></div>
+</div>
+
+<div class="shell">
+  <div class="backdrop" id="backdrop" onclick="closeSidebar()"></div>
+
+  <nav class="sidebar" id="sidebar">
+    <div class="nav-group-label">Overview</div>
+    <div class="nav-item" data-route="home" onclick="navigate('home')">
+      <span class="ic">🏠</span> Home
+    </div>
+
+    <div class="nav-group-label" style="margin-top:14px;">Data &amp; Schema</div>
+    <div class="nav-item" data-route="schema-comparator" onclick="navigate('schema-comparator')">
+      <span class="ic">🧬</span> Schema Comparator
+    </div>
+    <div class="nav-item" data-route="json-formatter" onclick="navigate('json-formatter')">
+      <span class="ic">{ }</span> JSON Formatter
+    </div>
+    <div class="nav-item" data-route="xml-formatter" onclick="navigate('xml-formatter')">
+      <span class="ic">&lt;/&gt;</span> XML Formatter
+    </div>
+
+    <div class="nav-group-label" style="margin-top:14px;">Coming soon</div>
+    <div class="nav-item disabled"><span class="ic">🔤</span> Regex Tester <span class="soon">SOON</span></div>
+    <div class="nav-item disabled"><span class="ic">🔑</span> JWT Decoder <span class="soon">SOON</span></div>
+    <div class="nav-item disabled"><span class="ic">🕒</span> Timestamp Tool <span class="soon">SOON</span></div>
+  </nav>
+
+  <div class="content">
+
+    <div class="view active" id="view-home">
+      <div class="dash">
+        <div class="dash-hero">
+          <div class="eyebrow">Toolbench</div>
+          <h1>Developer utilities, all in one place</h1>
+          <p>A growing collection of small, fast tools for working with APIs and structured data — no accounts, no upload to a server, everything runs right here in your browser.</p>
+        </div>
+
+        <div class="section-label">Available now</div>
+        <div class="tool-grid">
+          <div class="tool-card" onclick="navigate('schema-comparator')">
+            <span class="arrow">↗</span>
+            <div class="ic ic-schema">🧬</div>
+            <h3>Schema Comparator</h3>
+            <p>Validate JSON against JSON Schema, or XML against XSD, and diff two payloads field by field.</p>
+          </div>
+          <div class="tool-card" onclick="navigate('json-formatter')">
+            <span class="arrow">↗</span>
+            <div class="ic ic-json">{ }</div>
+            <h3>JSON Formatter</h3>
+            <p>Beautify, minify, and validate JSON with syntax highlighting, sorting, and one-click copy.</p>
+          </div>
+          <div class="tool-card" onclick="navigate('xml-formatter')">
+            <span class="arrow">↗</span>
+            <div class="ic ic-xml">&lt;/&gt;</div>
+            <h3>XML Formatter</h3>
+            <p>Pretty-print or minify XML, check well-formedness, and view your document with highlighting.</p>
+          </div>
+        </div>
+
+        <div class="section-label">On the roadmap</div>
+        <div class="tool-grid">
+          <div class="tool-card soon"><span class="badge-soon">Soon</span><div class="ic ic-gray">🔤</div><h3>Regex Tester</h3><p>Build and test regular expressions against sample text with live match highlighting.</p></div>
+          <div class="tool-card soon"><span class="badge-soon">Soon</span><div class="ic ic-gray">🔑</div><h3>JWT Decoder</h3><p>Decode and inspect JWT headers, payloads, and signatures.</p></div>
+          <div class="tool-card soon"><span class="badge-soon">Soon</span><div class="ic ic-gray">🕒</div><h3>Timestamp Tool</h3><p>Convert between Unix timestamps, ISO 8601, and human-readable dates.</p></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="view" id="view-schema-comparator"><iframe id="frame-schema-comparator" loading="lazy"></iframe></div>
+    <div class="view" id="view-json-formatter"><iframe id="frame-json-formatter" loading="lazy"></iframe></div>
+    <div class="view" id="view-xml-formatter"><iframe id="frame-xml-formatter" loading="lazy"></iframe></div>
+
+  </div>
+</div>
+
+<script>
+const TOOLS={
+  'home':               {title:'', src:null},
+  'schema-comparator':  {title:'Schema Comparator', src:'tools/schema-comparator.html'},
+  'json-formatter':     {title:'JSON Formatter',    src:'tools/json-formatter.html'},
+  'xml-formatter':      {title:'XML Formatter',     src:'tools/xml-formatter.html'},
+};
+const loaded=new Set();
+
+function navigate(route){
+  if(!TOOLS[route]) route='home';
+  location.hash=route;
+  render(route);
+  closeSidebar();
+}
+
+function render(route){
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.toggle('active',n.dataset.route===route));
+
+  const view=document.getElementById('view-'+route);
+  if(view) view.classList.add('active');
+
+  const t=TOOLS[route];
+  document.getElementById('topbar-title').innerHTML = t.title ? `<strong>${t.title}</strong>` : '';
+
+  if(t.src && !loaded.has(route)){
+    document.getElementById('frame-'+route).src=t.src;
+    loaded.add(route);
+  }
+
+  trackPageview(route,t.title||'Home');
+}
+
+// Fires a manual GoatCounter pageview for this route. Safe no-op if the
+// analytics script hasn't loaded yet (blocked, offline, or ad-blocked).
+function trackPageview(route,title){
+  if(window.goatcounter && window.goatcounter.count){
+    window.goatcounter.count({path:'/'+route, title:title, event:false});
+  }
+}
+
+function openSidebar(){document.getElementById('sidebar').classList.add('open');document.getElementById('backdrop').classList.add('show');}
+function closeSidebar(){document.getElementById('sidebar').classList.remove('open');document.getElementById('backdrop').classList.remove('show');}
+
+document.getElementById('hamburger').addEventListener('click',()=>{
+  document.getElementById('sidebar').classList.contains('open') ? closeSidebar() : openSidebar();
+});
+
+window.addEventListener('hashchange',()=>render((location.hash||'#home').slice(1)));
+
+// init
+render((location.hash||'#home').slice(1));
+</script>
+</body>
+</html>

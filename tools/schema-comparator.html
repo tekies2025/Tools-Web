@@ -1,0 +1,984 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>API Schema Validator</title>
+<style>
+:root{
+  --bg:#0f1117;--surface:#1a1d27;--surface2:#21263a;--border:#2e3348;
+  --accent:#5b8def;--accent2:#7c5cbf;--success:#3ecf8e;--warn:#f59e0b;
+  --error:#f87171;--text:#e2e8f0;--muted:#7a849e;
+  --mono:'JetBrains Mono','Fira Code',monospace;--sans:'Inter',system-ui,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:100vh;display:flex;flex-direction:column;}
+
+header{padding:16px 28px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;background:var(--surface);}
+.logo{width:34px;height:34px;background:linear-gradient(135deg,var(--accent),var(--accent2));border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0;}
+header h1{font-size:16px;font-weight:600;}
+header p{font-size:11px;color:var(--muted);margin-top:2px;}
+
+main{flex:1;padding:24px 28px;max-width:1440px;width:100%;margin:0 auto;}
+
+.panels{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:18px;}
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;display:flex;flex-direction:column;}
+.panel-header{padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:var(--surface2);}
+.panel-title{display:flex;align-items:center;gap:7px;font-size:12px;font-weight:600;}
+.badge{font-size:9px;padding:2px 7px;border-radius:20px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;}
+.badge-json{background:#1e3a5f;color:#60a5fa;}
+.badge-xml{background:#2d1e4f;color:#c084fc;}
+.badge-schema{background:#1e3d2a;color:#4ade80;}
+.badge-xsd{background:#3d2a1e;color:#fb923c;}
+.badge-auto{background:#2d2d2d;color:#94a3b8;}
+
+.tabs{display:flex;gap:3px;background:var(--bg);border-radius:5px;padding:2px;}
+.tab{padding:3px 10px;border-radius:4px;font-size:10px;font-weight:600;cursor:pointer;border:none;background:transparent;color:var(--muted);transition:all .15s;}
+.tab.active{background:var(--surface2);color:var(--text);}
+.tab:hover:not(.active){color:var(--text);}
+
+.panel-body{flex:1;display:flex;flex-direction:column;}
+.input-area{display:none;flex:1;flex-direction:column;}
+.input-area.active{display:flex;}
+
+.upload-zone{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px 16px;border:2px dashed var(--border);margin:14px;border-radius:8px;cursor:pointer;transition:all .2s;text-align:center;gap:7px;}
+.upload-zone:hover,.upload-zone.drag-over{border-color:var(--accent);background:rgba(91,141,239,.06);}
+.upload-zone .icon{font-size:26px;}
+.upload-zone p{font-size:12px;color:var(--muted);}
+.upload-zone strong{color:var(--accent);}
+.upload-zone input{display:none;}
+
+.file-name{font-size:11px;color:var(--success);margin:0 14px 4px;display:none;align-items:center;gap:5px;}
+.file-name.show{display:flex;}
+
+textarea{flex:1;min-height:230px;margin:14px;margin-top:6px;background:var(--bg);border:1px solid var(--border);border-radius:7px;color:var(--text);font-family:var(--mono);font-size:11.5px;line-height:1.65;padding:12px;resize:vertical;outline:none;transition:border-color .2s;}
+textarea:focus{border-color:var(--accent);}
+textarea::placeholder{color:var(--muted);}
+
+.compare-bar{display:flex;align-items:center;justify-content:center;gap:14px;margin-bottom:20px;}
+.btn-compare{display:flex;align-items:center;gap:9px;padding:12px 32px;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;font-family:var(--sans);font-size:13px;font-weight:700;border:none;border-radius:8px;cursor:pointer;box-shadow:0 4px 18px rgba(91,141,239,.35);transition:transform .15s,box-shadow .15s;}
+.btn-compare:hover{transform:translateY(-1px);box-shadow:0 6px 24px rgba(91,141,239,.45);}
+.btn-clear{padding:11px 18px;background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:8px;font-size:12px;cursor:pointer;font-family:var(--sans);transition:all .15s;}
+.btn-clear:hover{border-color:var(--error);color:var(--error);}
+
+#result{display:none;}
+#result.show{display:block;}
+.result-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;}
+.result-header{padding:12px 18px;display:flex;align-items:center;gap:10px;background:var(--surface2);border-bottom:1px solid var(--border);}
+.result-header h2{font-size:13px;font-weight:600;flex:1;}
+
+.summary-pills{display:flex;gap:7px;flex-wrap:wrap;padding:12px 18px;border-bottom:1px solid var(--border);}
+.pill{display:flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:600;}
+.pill-ok{background:rgba(62,207,142,.12);color:var(--success);border:1px solid rgba(62,207,142,.2);}
+.pill-warn{background:rgba(245,158,11,.12);color:var(--warn);border:1px solid rgba(245,158,11,.2);}
+.pill-error{background:rgba(248,113,113,.12);color:var(--error);border:1px solid rgba(248,113,113,.2);}
+.pill-info{background:rgba(91,141,239,.12);color:var(--accent);border:1px solid rgba(91,141,239,.2);}
+
+/* Filter bar */
+.filter-bar{display:flex;gap:6px;padding:10px 18px;border-bottom:1px solid var(--border);align-items:center;flex-wrap:wrap;}
+.filter-bar span{font-size:11px;color:var(--muted);margin-right:4px;}
+.filter-btn{padding:3px 10px;border-radius:20px;font-size:10px;font-weight:600;cursor:pointer;border:1px solid var(--border);background:transparent;color:var(--muted);transition:all .15s;}
+.filter-btn.active{background:var(--surface2);color:var(--text);border-color:var(--accent);}
+.filter-btn:hover:not(.active){color:var(--text);}
+.search-box{margin-left:auto;padding:4px 10px;background:var(--bg);border:1px solid var(--border);border-radius:5px;color:var(--text);font-size:11px;outline:none;font-family:var(--sans);width:180px;}
+.search-box:focus{border-color:var(--accent);}
+
+/* Diff table */
+.diff-table{width:100%;border-collapse:collapse;}
+.diff-table th{padding:9px 14px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);background:var(--bg);text-align:left;border-bottom:1px solid var(--border);}
+.diff-table td{padding:10px 14px;font-size:12px;border-bottom:1px solid var(--border);vertical-align:middle;}
+.diff-table tr:last-child td{border-bottom:none;}
+.diff-table tr:hover td{background:var(--surface2);}
+.diff-table tr.hidden{display:none;}
+
+.field-path{font-family:var(--mono);font-size:11px;color:var(--accent);}
+.msg-text{font-size:12px;color:var(--text);}
+.val-box{font-family:var(--mono);font-size:10px;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:2px 6px;display:inline-block;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.val-bad{border-color:rgba(248,113,113,.3);color:var(--error);}
+.val-warn{border-color:rgba(245,158,11,.3);color:var(--warn);}
+.val-ok{border-color:rgba(62,207,142,.3);color:var(--success);}
+
+.chip{padding:2px 8px;border-radius:20px;font-size:9px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;font-family:var(--sans);}
+.chip-error{background:rgba(248,113,113,.15);color:var(--error);}
+.chip-warn{background:rgba(245,158,11,.15);color:var(--warn);}
+.chip-ok{background:rgba(62,207,142,.15);color:var(--success);}
+.chip-info{background:rgba(91,141,239,.15);color:var(--accent);}
+
+.all-ok{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:48px 20px;gap:10px;text-align:center;}
+.all-ok .ok-icon{font-size:44px;}
+.all-ok h3{font-size:17px;color:var(--success);}
+.all-ok p{font-size:12px;color:var(--muted);}
+
+.spinner{width:16px;height:16px;border:2px solid rgba(255,255,255,.2);border-top-color:#fff;border-radius:50%;animation:spin .6s linear infinite;display:none;}
+@keyframes spin{to{transform:rotate(360deg);}}
+
+.export-btn{padding:6px 14px;background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:6px;font-size:11px;cursor:pointer;font-family:var(--sans);transition:all .15s;}
+.export-btn:hover{border-color:var(--accent);color:var(--accent);}
+
+::-webkit-scrollbar{width:5px;height:5px;}
+::-webkit-scrollbar-track{background:var(--bg);}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px;}
+
+@media(max-width:860px){.panels{grid-template-columns:1fr;}main{padding:14px;}}
+</style>
+</head>
+<body>
+
+<main>
+  <div class="panels">
+
+    <!-- Payload panel -->
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title">📄 Request Payload <span class="badge badge-auto" id="payload-badge">AUTO</span></div>
+        <div class="tabs">
+          <button class="tab active" onclick="switchTab('payload','paste')">Paste</button>
+          <button class="tab"        onclick="switchTab('payload','upload')">Upload</button>
+        </div>
+      </div>
+      <div class="panel-body">
+        <div class="input-area active" id="payload-paste">
+          <textarea id="payload-text" placeholder="Paste your JSON or XML request payload here…"></textarea>
+        </div>
+        <div class="input-area" id="payload-upload">
+          <div class="file-name" id="payload-fname">✅ <span id="payload-fname-text"></span></div>
+          <div class="upload-zone" id="payload-drop"
+               onclick="document.getElementById('payload-file').click()"
+               ondragover="handleDrag(event,'payload-drop')"
+               ondragleave="handleDragLeave('payload-drop')"
+               ondrop="handleDrop(event,'payload')">
+            <div class="icon">📂</div>
+            <p><strong>Click to browse</strong> or drag &amp; drop</p>
+            <p>.json · .xml · .txt</p>
+            <input type="file" id="payload-file" accept=".json,.xml,.txt" onchange="loadFile(event,'payload')"/>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Schema panel -->
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title">📋 Schema File <span class="badge badge-auto" id="schema-badge">AUTO</span></div>
+        <div class="tabs">
+          <button class="tab active" onclick="switchTab('schema','paste')">Paste</button>
+          <button class="tab"        onclick="switchTab('schema','upload')">Upload</button>
+        </div>
+      </div>
+      <div class="panel-body">
+        <div class="input-area active" id="schema-paste">
+          <textarea id="schema-text" placeholder="Paste your JSON Schema, XSD, or sample XML/JSON here…"></textarea>
+        </div>
+        <div class="input-area" id="schema-upload">
+          <div class="file-name" id="schema-fname">✅ <span id="schema-fname-text"></span></div>
+          <div class="upload-zone" id="schema-drop"
+               onclick="document.getElementById('schema-file').click()"
+               ondragover="handleDrag(event,'schema-drop')"
+               ondragleave="handleDragLeave('schema-drop')"
+               ondrop="handleDrop(event,'schema')">
+            <div class="icon">📂</div>
+            <p><strong>Click to browse</strong> or drag &amp; drop</p>
+            <p>.json · .xsd · .xml · .txt</p>
+            <input type="file" id="schema-file" accept=".json,.xsd,.xml,.txt" onchange="loadFile(event,'schema')"/>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="compare-bar">
+    <button class="btn-compare" onclick="runValidation()">
+      <span class="spinner" id="spinner"></span>
+      <span id="btn-label">⚡ Compare &amp; Validate</span>
+    </button>
+    <button class="btn-clear" onclick="clearAll()">✕ Clear All</button>
+  </div>
+
+  <div id="result">
+    <div class="result-card">
+      <div class="result-header">
+        <h2>Validation Result</h2>
+        <button class="export-btn" onclick="exportCSV()">⬇ Export CSV</button>
+      </div>
+      <div class="summary-pills" id="pill-bar"></div>
+      <div class="filter-bar">
+        <span>Filter:</span>
+        <button class="filter-btn active" onclick="setFilter('all',this)">All</button>
+        <button class="filter-btn" onclick="setFilter('error',this)">🔴 Errors</button>
+        <button class="filter-btn" onclick="setFilter('warn',this)">🟡 Warnings</button>
+        <button class="filter-btn" onclick="setFilter('info',this)">🔵 Info</button>
+        <button class="filter-btn" onclick="setFilter('ok',this)">✅ OK</button>
+        <input class="search-box" id="search-box" placeholder="🔍 Search field…" oninput="applySearch()"/>
+      </div>
+      <div style="overflow-x:auto;">
+        <table class="diff-table" id="diff-table">
+          <thead>
+            <tr>
+              <th style="width:36px;">Sev</th>
+              <th style="width:200px;">Field / Element</th>
+              <th>Description</th>
+              <th style="width:160px;">Payload Value</th>
+              <th style="width:160px;">Expected (Schema)</th>
+              <th style="width:130px;">Type</th>
+            </tr>
+          </thead>
+          <tbody id="diff-body"></tbody>
+        </table>
+      </div>
+      <div id="all-ok-banner" style="display:none;">
+        <div class="all-ok">
+          <div class="ok-icon">✅</div>
+          <h3>All Clear — Payload is Valid</h3>
+          <p>No missing fields, type mismatches, constraint violations, or pattern errors found.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script>
+// ═══════════════════════════════════════════════════════════
+//  UTILITIES
+// ═══════════════════════════════════════════════════════════
+function esc(s){ return String(s??'—').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function switchTab(panel,mode){
+  ['paste','upload'].forEach(m=>{
+    document.getElementById(`${panel}-${m}`).classList.toggle('active',m===mode);
+  });
+  const hdr = document.getElementById(`${panel}-${mode}`).closest('.panel').querySelector('.tabs');
+  hdr.querySelectorAll('.tab').forEach((t,i)=>{
+    t.classList.toggle('active',(i===0&&mode==='paste')||(i===1&&mode==='upload'));
+  });
+}
+function handleDrag(e,id){e.preventDefault();document.getElementById(id).classList.add('drag-over');}
+function handleDragLeave(id){document.getElementById(id).classList.remove('drag-over');}
+function handleDrop(e,panel){e.preventDefault();document.getElementById(`${panel}-drop`).classList.remove('drag-over');const f=e.dataTransfer.files[0];if(f)processFile(f,panel);}
+function loadFile(e,panel){const f=e.target.files[0];if(f)processFile(f,panel);}
+function processFile(file,panel){
+  const r=new FileReader();
+  r.onload=ev=>{
+    const c=ev.target.result;
+    document.getElementById(`${panel}-text`).value=c;
+    document.getElementById(`${panel}-fname-text`).textContent=file.name;
+    document.getElementById(`${panel}-fname`).classList.add('show');
+    detectType(panel,c);
+  };
+  r.readAsText(file);
+}
+
+function detectType(panel,text){
+  const t=(text||'').trim();
+  const el=document.getElementById(`${panel}-badge`);
+  if(!t){el.textContent='AUTO';el.className='badge badge-auto';return'unknown';}
+  if(t.startsWith('<')){
+    if(t.includes('xs:schema')||t.includes('xsd:schema')||t.includes('XMLSchema')||t.includes('xmlns:xs')){
+      el.textContent='XSD';el.className='badge badge-xsd';return'xsd';
+    }
+    el.textContent='XML';el.className='badge badge-xml';return'xml';
+  }
+  if(t.startsWith('{')||t.startsWith('[')){
+    try{
+      const p=JSON.parse(t);
+      if(p['$schema']||p.properties||p.definitions||p.type==='object'){
+        el.textContent='JSON SCHEMA';el.className='badge badge-schema';return'jsonschema';
+      }
+    }catch{}
+    el.textContent='JSON';el.className='badge badge-json';return'json';
+  }
+  el.textContent='TEXT';el.className='badge badge-auto';return'text';
+}
+
+['payload','schema'].forEach(p=>{
+  document.getElementById(`${p}-text`).addEventListener('input',function(){detectType(p,this.value);});
+});
+
+// ═══════════════════════════════════════════════════════════
+//  MAIN RUNNER
+// ═══════════════════════════════════════════════════════════
+let lastIssues=[];
+
+function runValidation(){
+  const pRaw=document.getElementById('payload-text').value.trim();
+  const sRaw=document.getElementById('schema-text').value.trim();
+  if(!pRaw){alert('Please provide a request payload.');return;}
+  if(!sRaw) {alert('Please provide a schema.');return;}
+  document.getElementById('spinner').style.display='block';
+  document.getElementById('btn-label').textContent='Validating…';
+  setTimeout(()=>{
+    const pt=detectType('payload',pRaw);
+    const st=detectType('schema',sRaw);
+    let issues=[];
+    try{
+      if((pt==='json'||pt==='jsonschema')&&st==='jsonschema') issues=validateJsonSchema(pRaw,sRaw);
+      else if(pt==='json'&&st==='json') issues=compareJsonJson(pRaw,sRaw);
+      else if(pt==='xml'&&st==='xsd')  issues=validateXmlXsd(pRaw,sRaw);
+      else if(pt==='xml'&&st==='xml')  issues=compareXmlXml(pRaw,sRaw);
+      else issues=crossTypeCompare(pRaw,pt,sRaw,st);
+    }catch(err){
+      issues=[{field:'—',type:'PARSE ERROR',message:'Could not parse input: '+err.message,payloadVal:'—',schemaVal:'—',severity:'error'}];
+    }
+    lastIssues=issues;
+    renderResult(issues);
+    document.getElementById('spinner').style.display='none';
+    document.getElementById('btn-label').textContent='⚡ Compare & Validate';
+  },300);
+}
+
+// ═══════════════════════════════════════════════════════════
+//  1. JSON vs JSON SCHEMA — DEEP VALIDATION
+// ═══════════════════════════════════════════════════════════
+function validateJsonSchema(pRaw,sRaw){
+  const payload=JSON.parse(pRaw);
+  const schema=JSON.parse(sRaw);
+  const issues=[];
+
+  function resolve(ref,root){
+    if(!ref||!ref.startsWith('#/')) return null;
+    const parts=ref.slice(2).split('/');
+    let cur=root;
+    for(const p of parts){ cur=cur[p]; if(!cur) return null; }
+    return cur;
+  }
+
+  function checkNode(data,sc,path,root){
+    if(!sc) return;
+    // resolve $ref
+    if(sc['$ref']){ const r=resolve(sc['$ref'],root); if(r) sc=r; }
+
+    // allOf / anyOf / oneOf
+    if(sc.allOf){ sc.allOf.forEach(s=>checkNode(data,s,path,root)); }
+    if(sc.anyOf){
+      const valid=sc.anyOf.some(s=>{ const tmp=[]; checkNode(data,s,path,root,tmp); return tmp.length===0; });
+      if(!valid) issues.push({field:path||'root',type:'ANY-OF FAIL',severity:'error',
+        message:`"${path||'root'}" does not match any of the anyOf schemas`,payloadVal:JSON.stringify(data).slice(0,50),schemaVal:'anyOf[…]'});
+    }
+
+    const aType=Array.isArray(data)?'array': data===null?'null':typeof data;
+
+    // type check
+    if(sc.type){
+      const exp=Array.isArray(sc.type)?sc.type:[sc.type];
+      if(!exp.includes(aType)&&!(aType==='integer'&&exp.includes('number'))){
+        issues.push({field:path||'root',type:'TYPE MISMATCH',severity:'error',
+          message:`Expected type "${sc.type}" but got "${aType}"`,
+          payloadVal:`${aType}: ${String(data).slice(0,40)}`,schemaVal:sc.type});
+      }
+    }
+
+    // string constraints
+    if(aType==='string'){
+      if(sc.minLength!==undefined&&data.length<sc.minLength)
+        issues.push({field:path,type:'MIN LENGTH',severity:'warn',message:`Length ${data.length} < minLength ${sc.minLength}`,payloadVal:`len:${data.length}`,schemaVal:`minLength:${sc.minLength}`});
+      if(sc.maxLength!==undefined&&data.length>sc.maxLength)
+        issues.push({field:path,type:'MAX LENGTH',severity:'warn',message:`Length ${data.length} > maxLength ${sc.maxLength}`,payloadVal:`len:${data.length}`,schemaVal:`maxLength:${sc.maxLength}`});
+      if(sc.pattern){
+        try{ if(!new RegExp(sc.pattern).test(data))
+          issues.push({field:path,type:'PATTERN',severity:'error',message:`"${data.slice(0,30)}" does not match pattern /${sc.pattern}/`,payloadVal:data.slice(0,40),schemaVal:`/${sc.pattern}/`});
+        }catch{}
+      }
+      if(sc.format) validateFormat(data,sc.format,path,issues);
+    }
+
+    // number constraints
+    if(aType==='number'||aType==='integer'){
+      if(sc.minimum!==undefined){
+        const fail=sc.exclusiveMinimum?data<=sc.minimum:data<sc.minimum;
+        if(fail) issues.push({field:path,type:'BELOW MIN',severity:'warn',message:`${data} < minimum ${sc.minimum}`,payloadVal:String(data),schemaVal:`min:${sc.minimum}`});
+      }
+      if(sc.maximum!==undefined){
+        const fail=sc.exclusiveMaximum?data>=sc.maximum:data>sc.maximum;
+        if(fail) issues.push({field:path,type:'ABOVE MAX',severity:'warn',message:`${data} > maximum ${sc.maximum}`,payloadVal:String(data),schemaVal:`max:${sc.maximum}`});
+      }
+      if(sc.multipleOf!==undefined&&data%sc.multipleOf!==0)
+        issues.push({field:path,type:'MULTIPLE-OF',severity:'warn',message:`${data} is not a multiple of ${sc.multipleOf}`,payloadVal:String(data),schemaVal:`multipleOf:${sc.multipleOf}`});
+    }
+
+    // enum
+    if(sc.enum){
+      const match=sc.enum.some(e=>JSON.stringify(e)===JSON.stringify(data));
+      if(!match) issues.push({field:path,type:'ENUM',severity:'error',
+        message:`Value not in allowed enum list`,payloadVal:String(data).slice(0,40),schemaVal:`[${sc.enum.join(', ')}]`});
+    }
+
+    // const
+    if(sc.const!==undefined&&JSON.stringify(data)!==JSON.stringify(sc.const))
+      issues.push({field:path,type:'CONST',severity:'error',message:`Must equal ${JSON.stringify(sc.const)}`,payloadVal:String(data).slice(0,40),schemaVal:String(sc.const)});
+
+    // object
+    if(aType==='object'&&data!==null){
+      // required
+      if(sc.required) sc.required.forEach(req=>{
+        const fp=path?`${path}.${req}`:req;
+        if(!(req in data)) issues.push({field:fp,type:'MISSING REQUIRED',severity:'error',
+          message:`Required field "${fp}" is missing`,payloadVal:'— (absent)',schemaVal:'required'});
+      });
+
+      // properties
+      if(sc.properties) Object.entries(sc.properties).forEach(([k,propSc])=>{
+        const fp=path?`${path}.${k}`:k;
+        if(k in data){
+          const resolved=propSc['$ref']?resolve(propSc['$ref'],root):propSc;
+          checkNode(data[k],resolved||propSc,fp,root);
+        }
+      });
+
+      // additionalProperties
+      if(sc.additionalProperties===false&&sc.properties){
+        Object.keys(data).forEach(k=>{
+          if(!sc.properties[k]){
+            const fp=path?`${path}.${k}`:k;
+            issues.push({field:fp,type:'EXTRA FIELD',severity:'warn',
+              message:`"${fp}" not allowed (additionalProperties: false)`,
+              payloadVal:JSON.stringify(data[k]).slice(0,40),schemaVal:'not allowed'});
+          }
+        });
+      } else if(sc.properties){
+        // warn about extra fields even if not forbidden
+        Object.keys(data).forEach(k=>{
+          if(!sc.properties[k]){
+            const fp=path?`${path}.${k}`:k;
+            issues.push({field:fp,type:'EXTRA FIELD',severity:'info',
+              message:`"${fp}" not defined in schema properties`,
+              payloadVal:JSON.stringify(data[k]).slice(0,40),schemaVal:'undefined'});
+          }
+        });
+      }
+
+      // minProperties / maxProperties
+      const numKeys=Object.keys(data).length;
+      if(sc.minProperties!==undefined&&numKeys<sc.minProperties)
+        issues.push({field:path||'root',type:'MIN PROPS',severity:'warn',message:`Object has ${numKeys} properties, minimum is ${sc.minProperties}`,payloadVal:`${numKeys} props`,schemaVal:`min:${sc.minProperties}`});
+      if(sc.maxProperties!==undefined&&numKeys>sc.maxProperties)
+        issues.push({field:path||'root',type:'MAX PROPS',severity:'warn',message:`Object has ${numKeys} properties, maximum is ${sc.maxProperties}`,payloadVal:`${numKeys} props`,schemaVal:`max:${sc.maxProperties}`});
+
+      // dependencies
+      if(sc.dependencies) Object.entries(sc.dependencies).forEach(([k,dep])=>{
+        if(k in data){
+          if(Array.isArray(dep)) dep.forEach(d=>{
+            if(!(d in data)) issues.push({field:path?`${path}.${d}`:d,type:'DEPENDENCY',severity:'error',
+              message:`"${d}" is required because "${k}" is present`,payloadVal:'— (absent)',schemaVal:`dependency of ${k}`});
+          });
+        }
+      });
+    }
+
+    // array
+    if(aType==='array'){
+      if(sc.minItems!==undefined&&data.length<sc.minItems)
+        issues.push({field:path,type:'MIN ITEMS',severity:'warn',message:`Array has ${data.length} items, minimum is ${sc.minItems}`,payloadVal:`${data.length} items`,schemaVal:`minItems:${sc.minItems}`});
+      if(sc.maxItems!==undefined&&data.length>sc.maxItems)
+        issues.push({field:path,type:'MAX ITEMS',severity:'warn',message:`Array has ${data.length} items, maximum is ${sc.maxItems}`,payloadVal:`${data.length} items`,schemaVal:`maxItems:${sc.maxItems}`});
+      if(sc.uniqueItems&&data.length!==new Set(data.map(i=>JSON.stringify(i))).size)
+        issues.push({field:path,type:'UNIQUE ITEMS',severity:'warn',message:`Array contains duplicate items`,payloadVal:`${data.length} items`,schemaVal:'uniqueItems:true'});
+      if(sc.items){
+        if(Array.isArray(sc.items)){
+          sc.items.forEach((s,i)=>{ if(i<data.length) checkNode(data[i],s,`${path}[${i}]`,root); });
+        } else {
+          data.forEach((item,i)=>checkNode(item,sc.items,`${path}[${i}]`,root));
+        }
+      }
+    }
+
+    // if/then/else
+    if(sc.if&&sc.then){
+      const ifIssues=[];
+      checkNodeCollect(data,sc.if,path,root,ifIssues);
+      if(ifIssues.length===0) checkNode(data,sc.then,path,root);
+      else if(sc.else) checkNode(data,sc.else,path,root);
+    }
+  }
+
+  function checkNodeCollect(data,sc,path,root,col){
+    const saved=issues.splice(0);
+    checkNode(data,sc,path,root);
+    col.push(...issues.splice(0));
+    issues.push(...saved);
+  }
+
+  checkNode(payload,schema,'',schema);
+  if(issues.length===0) issues.push({field:'All fields',type:'VALID',severity:'ok',message:'Payload fully matches the JSON Schema.',payloadVal:'✓',schemaVal:'✓'});
+  return issues;
+}
+
+// Format validators
+function validateFormat(val,fmt,path,issues){
+  const patterns={
+    'email':/^[^\s@]+@[^\s@]+\.[^\s@]+$/,
+    'date':/^\d{4}-\d{2}-\d{2}$/,
+    'time':/^\d{2}:\d{2}:\d{2}/,
+    'date-time':/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/,
+    'uri':/^https?:\/\/.+/,
+    'ipv4':/^(\d{1,3}\.){3}\d{1,3}$/,
+    'ipv6':/^[0-9a-fA-F:]+$/,
+    'uuid':/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+    'hostname':/^[a-zA-Z0-9][a-zA-Z0-9\-\.]+[a-zA-Z]{2,}$/,
+    'phone':/^\+?[\d\s\-()]{7,15}$/,
+  };
+  if(patterns[fmt]&&!patterns[fmt].test(val)){
+    issues.push({field:path,type:'FORMAT',severity:'warn',
+      message:`Value does not match format "${fmt}"`,payloadVal:val.slice(0,40),schemaVal:`format:${fmt}`});
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+//  2. JSON vs JSON — structural diff
+// ═══════════════════════════════════════════════════════════
+function compareJsonJson(pRaw,sRaw){
+  const p=JSON.parse(pRaw), s=JSON.parse(sRaw);
+  const issues=[];
+  function cmp(pObj,sObj,path){
+    if(typeof sObj!=='object'||sObj===null) return;
+    Object.keys(sObj).forEach(k=>{
+      const fp=path?`${path}.${k}`:k;
+      if(!(k in pObj)){
+        issues.push({field:fp,type:'MISSING FIELD',severity:'error',message:`"${fp}" present in schema but missing in payload`,payloadVal:'— (absent)',schemaVal:JSON.stringify(sObj[k]).slice(0,40)});
+      } else {
+        const pt=Array.isArray(pObj[k])?'array':typeof pObj[k];
+        const st=Array.isArray(sObj[k])?'array':typeof sObj[k];
+        if(pt!==st){
+          issues.push({field:fp,type:'TYPE MISMATCH',severity:'error',message:`Type differs — payload:${pt}, schema:${st}`,payloadVal:`${pt}:${JSON.stringify(pObj[k]).slice(0,30)}`,schemaVal:`${st}:${JSON.stringify(sObj[k]).slice(0,30)}`});
+        } else if(pt==='object'&&pObj[k]!==null){
+          cmp(pObj[k],sObj[k],fp);
+        } else if(pt==='array'&&sObj[k].length>0&&pObj[k].length>0){
+          cmp(pObj[k][0],sObj[k][0],`${fp}[0]`);
+        } else {
+          issues.push({field:fp,type:'MATCH',severity:'ok',message:`"${fp}" is present and type matches`,payloadVal:String(pObj[k]).slice(0,40),schemaVal:String(sObj[k]).slice(0,40)});
+        }
+      }
+    });
+    Object.keys(pObj).forEach(k=>{
+      const fp=path?`${path}.${k}`:k;
+      if(!(k in sObj))
+        issues.push({field:fp,type:'EXTRA FIELD',severity:'info',message:`"${fp}" in payload but not in schema`,payloadVal:JSON.stringify(pObj[k]).slice(0,40),schemaVal:'— (undefined)'});
+    });
+  }
+  cmp(p,s,'');
+  if(issues.length===0) issues.push({field:'All fields',type:'MATCH',severity:'ok',message:'Both JSON structures match.',payloadVal:'✓',schemaVal:'✓'});
+  return issues;
+}
+
+// ═══════════════════════════════════════════════════════════
+//  3. XML vs XSD — FULL DEEP VALIDATION
+// ═══════════════════════════════════════════════════════════
+function validateXmlXsd(xmlRaw,xsdRaw){
+  const issues=[];
+  let xmlDoc,xsdDoc;
+  try{ xmlDoc=new DOMParser().parseFromString(xmlRaw,'application/xml'); }
+  catch(e){ issues.push({field:'—',type:'XML PARSE ERROR',severity:'error',message:'Could not parse XML: '+e.message,payloadVal:'—',schemaVal:'—'}); return issues; }
+  if(xmlDoc.querySelector('parsererror')){
+    const msg=xmlDoc.querySelector('parsererror').textContent.slice(0,120);
+    issues.push({field:'—',type:'XML PARSE ERROR',severity:'error',message:'Malformed XML: '+msg,payloadVal:'—',schemaVal:'—'}); return issues;
+  }
+  try{ xsdDoc=new DOMParser().parseFromString(xsdRaw,'application/xml'); }
+  catch(e){ issues.push({field:'—',type:'XSD PARSE ERROR',severity:'error',message:'Could not parse XSD: '+e.message,payloadVal:'—',schemaVal:'—'}); return issues; }
+
+  // Build XSD element map
+  const XS='http://www.w3.org/2001/XMLSchema';
+  function getAttr(el,name){ return el.getAttribute(name)||el.getAttribute('xs:'+name)||el.getAttributeNS(null,name)||null; }
+
+  // Collect all xs:element definitions recursively
+  function collectElements(xsdNode,parentPath){
+    const xsEls=[...xsdNode.querySelectorAll('element')].filter(e=>e.namespaceURI===XS||e.tagName.includes('element'));
+    xsEls.forEach(xsEl=>{
+      const name=getAttr(xsEl,'name');
+      if(!name) return;
+      const fp=parentPath?`${parentPath}.${name}`:name;
+      const type=getAttr(xsEl,'type')||'';
+      const minOccurs=parseInt(getAttr(xsEl,'minOccurs')??'1');
+      const maxOccurs=getAttr(xsEl,'maxOccurs')||'1';
+      const nillable=getAttr(xsEl,'nillable')==='true';
+      const required=minOccurs>0;
+
+      // Find matching XML node(s) at the right level
+      const xmlNodes=findXmlNodes(xmlDoc,fp);
+
+      if(xmlNodes.length===0){
+        if(required){
+          issues.push({field:fp,type:'MISSING ELEMENT',severity:'error',
+            message:`Required element <${name}> is missing`,payloadVal:'— (absent)',schemaVal:`required, type:${type||'any'}`});
+        } else {
+          issues.push({field:fp,type:'OPTIONAL ABSENT',severity:'info',
+            message:`Optional element <${name}> not present (minOccurs=${minOccurs})`,payloadVal:'— (absent)',schemaVal:`optional, type:${type||'any'}`});
+        }
+        return;
+      }
+
+      // Check occurrences
+      const maxN=maxOccurs==='unbounded'?Infinity:parseInt(maxOccurs);
+      if(xmlNodes.length>maxN){
+        issues.push({field:fp,type:'TOO MANY',severity:'error',
+          message:`<${name}> appears ${xmlNodes.length} times but maxOccurs=${maxOccurs}`,
+          payloadVal:`${xmlNodes.length}x`,schemaVal:`maxOccurs:${maxOccurs}`});
+      }
+      if(xmlNodes.length<minOccurs){
+        issues.push({field:fp,type:'TOO FEW',severity:'error',
+          message:`<${name}> appears ${xmlNodes.length} times but minOccurs=${minOccurs}`,
+          payloadVal:`${xmlNodes.length}x`,schemaVal:`minOccurs:${minOccurs}`});
+      }
+
+      // Type + value validation per node
+      xmlNodes.forEach((xmlNode,idx)=>{
+        const nodePath=xmlNodes.length>1?`${fp}[${idx}]`:fp;
+        const textVal=(xmlNode.textContent||'').trim();
+
+        // nillable check
+        const xsiNil=xmlNode.getAttribute('xsi:nil')||xmlNode.getAttributeNS('http://www.w3.org/2001/XMLSchema-instance','nil');
+        if(!nillable&&xsiNil==='true'){
+          issues.push({field:nodePath,type:'NOT NILLABLE',severity:'error',message:`<${name}> has xsi:nil="true" but is not nillable`,payloadVal:'xsi:nil=true',schemaVal:'nillable:false'});
+        }
+
+        if(type) validateXmlType(textVal,type,nodePath,xsEl,xsdDoc,issues);
+
+        // attribute validation
+        validateXmlAttributes(xmlNode,xsEl,xsdDoc,nodePath,issues);
+
+        // mark ok if no issues for this node
+        const nodeIssues=issues.filter(i=>i.field===nodePath&&i.severity!=='ok');
+        if(nodeIssues.length===0){
+          issues.push({field:nodePath,type:'VALID',severity:'ok',
+            message:`<${name}> is present and valid`,payloadVal:textVal.slice(0,40)||'(element)',schemaVal:type||'any'});
+        }
+      });
+
+      // Recurse into nested complexType
+      const complexType=xsEl.querySelector('complexType')||findComplexType(xsdDoc,type);
+      if(complexType) collectElements(complexType,fp);
+    });
+  }
+
+  function findComplexType(xsdDoc,name){
+    if(!name) return null;
+    const localName=name.includes(':')?name.split(':')[1]:name;
+    const all=[...xsdDoc.querySelectorAll('complexType')];
+    return all.find(ct=>getAttr(ct,'name')===localName)||null;
+  }
+
+  function findXmlNodes(xmlDoc,dotPath){
+    const parts=dotPath.split('.');
+    // Find all elements matching last part name
+    return [...xmlDoc.getElementsByTagName(parts[parts.length-1])];
+  }
+
+  // Validate value against XSD built-in type
+  function validateXmlType(val,type,path,xsEl,xsdDoc,issues){
+    const localType=type.includes(':')?type.split(':')[1]:type;
+
+    // Check simpleType restrictions inline
+    const simpleType=xsEl.querySelector('simpleType')||findSimpleType(xsdDoc,localType);
+    if(simpleType){
+      validateSimpleType(val,simpleType,path,xsdDoc,issues);
+      return;
+    }
+
+    // Built-in XSD types
+    const typeChecks={
+      'string':   ()=>true,
+      'integer':  ()=>{ const n=Number(val); return Number.isInteger(n)&&String(n)===val.trim(); },
+      'int':      ()=>{ const n=parseInt(val); return !isNaN(n)&&n>=-2147483648&&n<=2147483647; },
+      'long':     ()=>!isNaN(Number(val))&&Number.isInteger(Number(val)),
+      'decimal':  ()=>!isNaN(Number(val)),
+      'float':    ()=>!isNaN(parseFloat(val)),
+      'double':   ()=>!isNaN(parseFloat(val)),
+      'boolean':  ()=>val==='true'||val==='false'||val==='1'||val==='0',
+      'date':     ()=>/^\d{4}-\d{2}-\d{2}$/.test(val)&&!isNaN(Date.parse(val)),
+      'dateTime': ()=>/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(val),
+      'time':     ()=>/^\d{2}:\d{2}:\d{2}/.test(val),
+      'gYear':    ()=>/^\d{4}$/.test(val),
+      'gMonth':   ()=>/^--(0[1-9]|1[0-2])$/.test(val),
+      'gDay':     ()=>/^---(0[1-9]|[12]\d|3[01])$/.test(val),
+      'duration': ()=>/^-?P/.test(val),
+      'anyURI':   ()=>val.length>0,
+      'base64Binary':()=>/^[A-Za-z0-9+/=\s]+$/.test(val),
+      'hexBinary':()=>/^[0-9A-Fa-f]*$/.test(val),
+      'positiveInteger':()=>Number.isInteger(Number(val))&&Number(val)>0,
+      'nonNegativeInteger':()=>Number.isInteger(Number(val))&&Number(val)>=0,
+      'nonPositiveInteger':()=>Number.isInteger(Number(val))&&Number(val)<=0,
+      'negativeInteger':()=>Number.isInteger(Number(val))&&Number(val)<0,
+      'unsignedInt':()=>{ const n=Number(val); return Number.isInteger(n)&&n>=0&&n<=4294967295; },
+      'unsignedLong':()=>{ const n=Number(val); return Number.isInteger(n)&&n>=0; },
+      'short':    ()=>{ const n=Number(val); return Number.isInteger(n)&&n>=-32768&&n<=32767; },
+      'byte':     ()=>{ const n=Number(val); return Number.isInteger(n)&&n>=-128&&n<=127; },
+      'token':    ()=>!/\s{2,}/.test(val)&&!val.startsWith(' ')&&!val.endsWith(' '),
+      'normalizedString':()=>!/[\r\n\t]/.test(val),
+      'NCName':   ()=>/^[a-zA-Z_][a-zA-Z0-9._\-]*$/.test(val),
+      'ID':       ()=>/^[a-zA-Z_][a-zA-Z0-9._\-]*$/.test(val),
+      'IDREF':    ()=>/^[a-zA-Z_][a-zA-Z0-9._\-]*$/.test(val),
+      'language': ()=>/^[a-zA-Z]{1,8}(-[a-zA-Z0-9]{1,8})*$/.test(val),
+    };
+
+    if(typeChecks[localType]){
+      if(val===''&&localType!=='string'){
+        issues.push({field:path,type:'EMPTY VALUE',severity:'warn',message:`<${path.split('.').pop()}> is empty but type is xs:${localType}`,payloadVal:'(empty)',schemaVal:`xs:${localType}`});
+      } else if(val!==''&&!typeChecks[localType]()){
+        issues.push({field:path,type:'TYPE MISMATCH',severity:'error',
+          message:`Value "${val.slice(0,30)}" is not a valid xs:${localType}`,
+          payloadVal:val.slice(0,40),schemaVal:`xs:${localType}`});
+      }
+    }
+  }
+
+  function findSimpleType(xsdDoc,name){
+    const all=[...xsdDoc.querySelectorAll('simpleType')];
+    return all.find(st=>(st.getAttribute('name')||'')=== name)||null;
+  }
+
+  function validateSimpleType(val,simpleTypeEl,path,xsdDoc,issues){
+    const restriction=simpleTypeEl.querySelector('restriction');
+    if(!restriction) return;
+    const base=getAttr(restriction,'base')||'string';
+
+    // First validate base type
+    validateXmlType(val,base,path,simpleTypeEl,xsdDoc,issues);
+
+    // Now facets
+    const facets={};
+    [...restriction.children].forEach(f=>{
+      const fn=f.localName||f.tagName.split(':').pop();
+      const fv=getAttr(f,'value');
+      facets[fn]=fv;
+    });
+
+    // enumeration
+    const enums=[...restriction.querySelectorAll('enumeration')].map(e=>getAttr(e,'value'));
+    if(enums.length>0&&!enums.includes(val)){
+      issues.push({field:path,type:'ENUM',severity:'error',
+        message:`Value "${val}" not in allowed values`,payloadVal:val.slice(0,40),schemaVal:`[${enums.join(', ')}]`});
+    }
+    if(facets.pattern){
+      try{if(!new RegExp(facets.pattern).test(val))
+        issues.push({field:path,type:'PATTERN',severity:'error',
+          message:`"${val.slice(0,30)}" does not match xs:pattern /${facets.pattern}/`,
+          payloadVal:val.slice(0,40),schemaVal:`/${facets.pattern}/`});
+      }catch{}
+    }
+    if(facets.minLength!==undefined&&val.length<parseInt(facets.minLength))
+      issues.push({field:path,type:'MIN LENGTH',severity:'warn',message:`Length ${val.length} < minLength ${facets.minLength}`,payloadVal:`len:${val.length}`,schemaVal:`minLength:${facets.minLength}`});
+    if(facets.maxLength!==undefined&&val.length>parseInt(facets.maxLength))
+      issues.push({field:path,type:'MAX LENGTH',severity:'warn',message:`Length ${val.length} > maxLength ${facets.maxLength}`,payloadVal:`len:${val.length}`,schemaVal:`maxLength:${facets.maxLength}`});
+    if(facets.minInclusive!==undefined&&Number(val)<Number(facets.minInclusive))
+      issues.push({field:path,type:'BELOW MIN',severity:'warn',message:`${val} < minInclusive ${facets.minInclusive}`,payloadVal:val,schemaVal:`min:${facets.minInclusive}`});
+    if(facets.maxInclusive!==undefined&&Number(val)>Number(facets.maxInclusive))
+      issues.push({field:path,type:'ABOVE MAX',severity:'warn',message:`${val} > maxInclusive ${facets.maxInclusive}`,payloadVal:val,schemaVal:`max:${facets.maxInclusive}`});
+    if(facets.minExclusive!==undefined&&Number(val)<=Number(facets.minExclusive))
+      issues.push({field:path,type:'BELOW MIN',severity:'warn',message:`${val} <= minExclusive ${facets.minExclusive}`,payloadVal:val,schemaVal:`minExcl:${facets.minExclusive}`});
+    if(facets.maxExclusive!==undefined&&Number(val)>=Number(facets.maxExclusive))
+      issues.push({field:path,type:'ABOVE MAX',severity:'warn',message:`${val} >= maxExclusive ${facets.maxExclusive}`,payloadVal:val,schemaVal:`maxExcl:${facets.maxExclusive}`});
+    if(facets.totalDigits!==undefined){
+      const digits=val.replace(/[^0-9]/g,'').length;
+      if(digits>parseInt(facets.totalDigits))
+        issues.push({field:path,type:'TOTAL DIGITS',severity:'warn',message:`${digits} digits > totalDigits ${facets.totalDigits}`,payloadVal:val,schemaVal:`totalDigits:${facets.totalDigits}`});
+    }
+    if(facets.fractionDigits!==undefined){
+      const dotIdx=val.indexOf('.');
+      const frac=dotIdx>=0?val.slice(dotIdx+1).length:0;
+      if(frac>parseInt(facets.fractionDigits))
+        issues.push({field:path,type:'FRACTION DIGITS',severity:'warn',message:`${frac} fraction digits > fractionDigits ${facets.fractionDigits}`,payloadVal:val,schemaVal:`fractionDigits:${facets.fractionDigits}`});
+    }
+    if(facets.whiteSpace==='collapse'&&/\s{2,}/.test(val))
+      issues.push({field:path,type:'WHITESPACE',severity:'info',message:`Value has extra whitespace (whiteSpace=collapse expected)`,payloadVal:val.slice(0,40),schemaVal:'whiteSpace:collapse'});
+  }
+
+  // Attribute validation
+  function validateXmlAttributes(xmlNode,xsEl,xsdDoc,path,issues){
+    const xsAttrs=[...xsEl.querySelectorAll('attribute')];
+    xsAttrs.forEach(xsAttr=>{
+      const aName=getAttr(xsAttr,'name');
+      if(!aName) return;
+      const use=getAttr(xsAttr,'use')||'optional';
+      const type=getAttr(xsAttr,'type')||'string';
+      const fixed=getAttr(xsAttr,'fixed');
+      const defaultVal=getAttr(xsAttr,'default');
+      const attrVal=xmlNode.getAttribute(aName);
+      const attrPath=`${path}[@${aName}]`;
+
+      if(attrVal===null){
+        if(use==='required')
+          issues.push({field:attrPath,type:'MISSING ATTR',severity:'error',message:`Required attribute @${aName} is missing`,payloadVal:'— (absent)',schemaVal:`required, type:${type}`});
+        return;
+      }
+      if(fixed!==null&&attrVal!==fixed)
+        issues.push({field:attrPath,type:'FIXED ATTR',severity:'error',message:`@${aName} must be "${fixed}" (fixed value)`,payloadVal:attrVal,schemaVal:`fixed:"${fixed}"`});
+
+      validateXmlType(attrVal,type,attrPath,xsAttr,xsdDoc,issues);
+      issues.push({field:attrPath,type:'ATTR OK',severity:'ok',message:`Attribute @${aName} is present and valid`,payloadVal:attrVal.slice(0,40),schemaVal:type});
+    });
+
+    // Extra attributes not in schema
+    [...xmlNode.attributes].forEach(attr=>{
+      if(attr.name==='xsi:nil'||attr.name.startsWith('xmlns')) return;
+      const defined=xsAttrs.some(xa=>getAttr(xa,'name')===attr.name);
+      if(!defined)
+        issues.push({field:`${path}[@${attr.name}]`,type:'EXTRA ATTR',severity:'info',
+          message:`Attribute @${attr.name} not defined in XSD`,payloadVal:attr.value.slice(0,40),schemaVal:'undefined'});
+    });
+  }
+
+  // Check for extra XML elements not in XSD
+  function findExtraElements(xmlDoc,xsdDoc,issues){
+    const allXmlEls=new Set([...xmlDoc.querySelectorAll('*')].map(e=>e.localName||e.tagName));
+    const allXsdEls=new Set([...xsdDoc.querySelectorAll('element')].map(e=>e.getAttribute('name')).filter(Boolean));
+    allXmlEls.forEach(tag=>{
+      if(!allXsdEls.has(tag)&&tag!=='parsererror'){
+        issues.push({field:tag,type:'EXTRA ELEMENT',severity:'warn',
+          message:`<${tag}> in XML payload is not defined in XSD`,payloadVal:tag,schemaVal:'— (not in XSD)'});
+      }
+    });
+  }
+
+  // Root element check
+  const root=xmlDoc.documentElement;
+  const xsdRoot=[...xsdDoc.querySelectorAll('element')].find(e=>!e.parentElement.localName?.includes('complexType')&&!e.parentElement.localName?.includes('sequence')&&!e.parentElement.localName?.includes('choice'));
+  if(xsdRoot){
+    const expRoot=xsdRoot.getAttribute('name');
+    if(expRoot&&root.localName!==expRoot&&root.tagName!==expRoot){
+      issues.push({field:'/',type:'ROOT MISMATCH',severity:'error',
+        message:`Root element is <${root.tagName}> but XSD expects <${expRoot}>`,
+        payloadVal:`<${root.tagName}>`,schemaVal:`<${expRoot}>`});
+    }
+  }
+
+  collectElements(xsdDoc,'');
+  findExtraElements(xmlDoc,xsdDoc,issues);
+
+  if(issues.length===0) issues.push({field:'All elements',type:'VALID',severity:'ok',message:'XML is fully valid against the XSD schema.',payloadVal:'✓',schemaVal:'✓'});
+  return issues;
+}
+
+// ═══════════════════════════════════════════════════════════
+//  4. XML vs XML — structural compare
+// ═══════════════════════════════════════════════════════════
+function compareXmlXml(pRaw,sRaw){
+  const issues=[];
+  const pd=new DOMParser().parseFromString(pRaw,'application/xml');
+  const sd=new DOMParser().parseFromString(sRaw,'application/xml');
+  if(pd.querySelector('parseerror')||pd.querySelector('parsererror'))
+    return [{field:'—',type:'XML PARSE ERROR',severity:'error',message:'Payload XML is malformed',payloadVal:'—',schemaVal:'—'}];
+  if(sd.querySelector('parseerror')||sd.querySelector('parsererror'))
+    return [{field:'—',type:'XML PARSE ERROR',severity:'error',message:'Schema XML is malformed',payloadVal:'—',schemaVal:'—'}];
+
+  const pTags=new Set([...pd.querySelectorAll('*')].map(e=>e.localName||e.tagName));
+  const sTags=new Set([...sd.querySelectorAll('*')].map(e=>e.localName||e.tagName));
+
+  sTags.forEach(tag=>{
+    if(!pTags.has(tag)) issues.push({field:tag,type:'MISSING ELEMENT',severity:'error',message:`<${tag}> in schema but missing in payload`,payloadVal:'— (absent)',schemaVal:tag});
+    else issues.push({field:tag,type:'PRESENT',severity:'ok',message:`<${tag}> is present`,payloadVal:'✓',schemaVal:'✓'});
+  });
+  pTags.forEach(tag=>{
+    if(!sTags.has(tag)) issues.push({field:tag,type:'EXTRA ELEMENT',severity:'warn',message:`<${tag}> in payload but not in schema`,payloadVal:tag,schemaVal:'— (undefined)'});
+  });
+
+  // Attribute compare per element
+  [...sd.querySelectorAll('*')].forEach(sEl=>{
+    const tag=sEl.localName||sEl.tagName;
+    const pEl=pd.querySelector(tag);
+    if(!pEl) return;
+    [...sEl.attributes].forEach(attr=>{
+      if(!pEl.hasAttribute(attr.name))
+        issues.push({field:`${tag}[@${attr.name}]`,type:'MISSING ATTR',severity:'warn',message:`@${attr.name} on <${tag}> missing in payload`,payloadVal:'— (absent)',schemaVal:attr.value.slice(0,40)});
+    });
+  });
+
+  if(issues.filter(i=>i.severity!=='ok').length===0)
+    issues.push({field:'All elements',type:'MATCH',severity:'ok',message:'Both XML structures match.',payloadVal:'✓',schemaVal:'✓'});
+  return issues;
+}
+
+function crossTypeCompare(pRaw,pt,sRaw,st){
+  return [{field:'—',type:'TYPE MISMATCH',severity:'warn',
+    message:`Payload is ${pt} and schema is ${st}. Please ensure both are compatible types.`,
+    payloadVal:pt,schemaVal:st}];
+}
+
+// ═══════════════════════════════════════════════════════════
+//  RENDER
+// ═══════════════════════════════════════════════════════════
+let activeFilter='all';
+
+function renderResult(issues){
+  document.getElementById('result').classList.add('show');
+  const counts={error:0,warn:0,info:0,ok:0};
+  issues.forEach(i=>counts[i.severity]=(counts[i.severity]||0)+1);
+
+  document.getElementById('pill-bar').innerHTML=`
+    ${counts.error?`<span class="pill pill-error">🔴 ${counts.error} Error${counts.error>1?'s':''}</span>`:''}
+    ${counts.warn ?`<span class="pill pill-warn">🟡 ${counts.warn} Warning${counts.warn>1?'s':''}</span>`:''}
+    ${counts.info ?`<span class="pill pill-info">🔵 ${counts.info} Info</span>`:''}
+    ${counts.ok   ?`<span class="pill pill-ok">✅ ${counts.ok} OK</span>`:''}
+  `;
+
+  const onlyOk=counts.error===0&&counts.warn===0&&counts.info===0;
+  document.getElementById('all-ok-banner').style.display=onlyOk?'block':'none';
+  document.getElementById('diff-table').style.display=onlyOk?'none':'table';
+
+  const sevIcon={error:'🔴',warn:'🟡',info:'🔵',ok:'🟢'};
+  const chipCls={error:'chip-error',warn:'chip-warn',info:'chip-info',ok:'chip-ok'};
+  const valCls= {error:'val-bad',warn:'val-warn',info:'',ok:'val-ok'};
+
+  const tbody=document.getElementById('diff-body');
+  tbody.innerHTML=issues.map(i=>`
+    <tr data-sev="${i.severity}" data-field="${esc(i.field).toLowerCase()}">
+      <td style="text-align:center;">${sevIcon[i.severity]||'⚪'}</td>
+      <td><span class="field-path">${esc(i.field)}</span></td>
+      <td class="msg-text">${esc(i.message)}</td>
+      <td><span class="val-box ${valCls[i.severity]||''}">${esc(i.payloadVal)}</span></td>
+      <td><span class="val-box">${esc(i.schemaVal)}</span></td>
+      <td><span class="chip ${chipCls[i.severity]||'chip-info'}">${esc(i.type)}</span></td>
+    </tr>`).join('');
+
+  setFilter(activeFilter,document.querySelector('.filter-btn.active'));
+}
+
+function setFilter(sev,btn){
+  activeFilter=sev;
+  document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+  document.querySelectorAll('#diff-body tr').forEach(row=>{
+    const match=sev==='all'||row.dataset.sev===sev;
+    row.classList.toggle('hidden',!match);
+  });
+  applySearch();
+}
+
+function applySearch(){
+  const q=(document.getElementById('search-box').value||'').toLowerCase();
+  document.querySelectorAll('#diff-body tr:not(.hidden)').forEach(row=>{
+    row.style.display=(q===''||row.dataset.field.includes(q))?'':'none';
+  });
+}
+
+// ═══════════════════════════════════════════════════════════
+//  EXPORT CSV
+// ═══════════════════════════════════════════════════════════
+function exportCSV(){
+  if(!lastIssues.length) return;
+  const headers=['Field','Type','Severity','Message','Payload Value','Schema Value'];
+  const rows=lastIssues.map(i=>[i.field,i.type,i.severity,i.message,i.payloadVal,i.schemaVal]
+    .map(v=>`"${String(v).replace(/"/g,'""')}"`).join(','));
+  const csv=[headers.join(','),...rows].join('\n');
+  const a=document.createElement('a');
+  a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);
+  a.download='validation-result.csv'; a.click();
+}
+
+// ═══════════════════════════════════════════════════════════
+//  CLEAR
+// ═══════════════════════════════════════════════════════════
+function clearAll(){
+  ['payload','schema'].forEach(p=>{
+    document.getElementById(`${p}-text`).value='';
+    document.getElementById(`${p}-fname`).classList.remove('show');
+    document.getElementById(`${p}-fname-text`).textContent='';
+    document.getElementById(`${p}-badge`).textContent='AUTO';
+    document.getElementById(`${p}-badge`).className='badge badge-auto';
+    const fi=document.getElementById(`${p}-file`); if(fi) fi.value='';
+  });
+  document.getElementById('result').classList.remove('show');
+  document.getElementById('diff-body').innerHTML='';
+  document.getElementById('pill-bar').innerHTML='';
+  lastIssues=[];
+}
+</script>
+</body>
+</html>
